@@ -1,6 +1,6 @@
 
 locals {
-    ssh_key_name = "demo-key-${data.aws_caller_identity.current.user_id}"
+  ssh_key_name = "demo-key-${data.aws_caller_identity.current.user_id}"
 }
 
 # ## Generate a new key
@@ -24,76 +24,82 @@ locals {
 
 ## Search for an Ubuntu AMI in your region 
 data "aws_ami" "ubuntu" {
-    most_recent = true
-    name_regex = "^.*ubuntu-focal-20.04-amd64-server-.*"    
-    owners = [ "099720109477" ] ## Canonical
+  most_recent = true
+  name_regex  = "^.*ubuntu-focal-20.04-amd64-server-.*"
+  owners      = ["099720109477"] ## Canonical
 
-    filter {
-        name   = "root-device-type"
-        values = ["ebs"]
-    }
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 
-    filter {
-        name   = "virtualization-type"
-        values = ["hvm"]
-    }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 
 
 resource "aws_instance" "web" {
-    
-    ami = data.aws_ami.ubuntu.id
-    instance_type = var.instance_type
 
-    root_block_device {
-        encrypted = false
-        volume_size = 20
-        volume_type = "standard"
-        tags = local.default_tags
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+
+  root_block_device {
+    encrypted   = false
+    volume_size = 20
+    volume_type = "standard"
+    tags        = local.default_tags
+  }
+
+  subnet_id = random_shuffle.web_subnet.result[0]
+
+  tags = merge(local.default_tags,
+    {
+      Name = "${replace(local.user_mail, "@", "-")}-${random_string.bucket_suffix.result}"
     }
+  )
 
-    subnet_id = random_shuffle.web_subnet.result[0]
+  # key_name = aws_key_pair.kp.key_name
 
-    tags = merge(local.default_tags,
-        {
-            Name = "${replace(local.user_mail,"@","-")}-${random_string.bucket_suffix.result}"
-        }
-    )
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+  monitoring             = true
 
-    # key_name = aws_key_pair.kp.key_name
-
-    vpc_security_group_ids = [aws_security_group.web_sg.id]
+  metadata_options {
+    http_endpoint = "disabled"
+    http_tokens   = "required"
+  }
 }
 
 resource "random_shuffle" "web_subnet" {
-    input        = jsondecode(data.aws_ssm_parameter.demo_vpc_private_subnets.value)
-    result_count = 1
+  input        = jsondecode(data.aws_ssm_parameter.demo_vpc_private_subnets.value)
+  result_count = 1
 }
 
 resource "aws_security_group" "web_sg" {
-  name        = "${replace(local.user_mail,"@","-")}-${random_string.bucket_suffix.result}"
-  vpc_id      = data.aws_ssm_parameter.demo_vpc_id.value
+  name   = "${replace(local.user_mail, "@", "-")}-${random_string.bucket_suffix.result}"
+  vpc_id = data.aws_ssm_parameter.demo_vpc_id.value
 
-    ingress {
-        description      = "Incoming SSH"
-        from_port        = 22
-        to_port          = 22
-        protocol         = "tcp"
-        cidr_blocks      = [ "0.0.0.0/0" ]
+  ingress {
+    description = "Incoming SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["<cidr>"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = merge(local.default_tags,
+    {
+      Name = "${replace(local.user_mail, "@", "-")}-${random_string.bucket_suffix.result}"
     }
-
-    egress {
-        from_port        = 0
-        to_port          = 0
-        protocol         = "-1"
-        cidr_blocks      = ["0.0.0.0/0"]
-        ipv6_cidr_blocks = ["::/0"]
-    }
-
-    tags = merge(local.default_tags,
-        {
-            Name = "${replace(local.user_mail,"@","-")}-${random_string.bucket_suffix.result}"
-        }
-    )
+  )
 }

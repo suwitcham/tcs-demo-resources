@@ -1,23 +1,25 @@
 
 locals {
-    log_name = "flows-${random_string.lab_id.result}"
-    role_name = "role-${random_string.lab_id.result}"
-    rolepol_name = "rolepol-${random_string.lab_id.result}"
+  log_name     = "flows-${random_string.lab_id.result}"
+  role_name    = "role-${random_string.lab_id.result}"
+  rolepol_name = "rolepol-${random_string.lab_id.result}"
 
 }
 
 resource "aws_flow_log" "gc_lab" {
-    iam_role_arn    = aws_iam_role.vpc_flows_role.arn
-    log_destination = aws_cloudwatch_log_group.vpc_flows.arn
-    traffic_type = "ALL"
-    log_format = var.vpc_flow_log_format
-    vpc_id          = module.vpc.vpc_id
-    max_aggregation_interval = 60
+  iam_role_arn             = aws_iam_role.vpc_flows_role.arn
+  log_destination          = aws_cloudwatch_log_group.vpc_flows.arn
+  traffic_type             = "ALL"
+  log_format               = var.vpc_flow_log_format
+  vpc_id                   = module.vpc.vpc_id
+  max_aggregation_interval = 60
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flows" {
-  name = local.log_name
-  retention_in_days = 7
+  name              = local.log_name
+  retention_in_days = 120
+
+  kms_key_id = "<kms_key_id>"
 }
 
 resource "aws_iam_role" "vpc_flows_role" {
@@ -45,16 +47,16 @@ data "aws_iam_policy_document" "vpc_flows_role_policy" {
   statement {
     sid = "VPCLogsGenerator"
     actions = [
-        ## Not required because de log group is defined by terraform
-        ##"logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
+      ## Not required because de log group is defined by terraform
+      ##"logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
     ]
     resources = [
-        "${aws_cloudwatch_log_group.vpc_flows.arn}:*",
-        aws_cloudwatch_log_group.vpc_flows.arn
+      "${aws_cloudwatch_log_group.vpc_flows.arn}:*",
+      aws_cloudwatch_log_group.vpc_flows.arn
     ]
   }
 }

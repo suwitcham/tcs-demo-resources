@@ -1,9 +1,9 @@
 ## Create user_data 
 locals {
-    lc_name = "lt${random_string.lab_id.result}"
-    ag_name = "ag${random_string.lab_id.result}"
+  lc_name = "lt${random_string.lab_id.result}"
+  ag_name = "ag${random_string.lab_id.result}"
 
-    instance_user_data = <<EOT
+  instance_user_data = <<EOT
 #!/bin/bash
 # Install the required software 
 apt update
@@ -31,61 +31,66 @@ EOT
 }
 
 resource "aws_key_pair" "kp" {
-    key_name   = "labkey-${random_string.lab_id.result}"
-    public_key = file("${var.aws_key_pair_pub}.pub")
+  key_name   = "labkey-${random_string.lab_id.result}"
+  public_key = file("${var.aws_key_pair_pub}.pub")
 }
 
 data "aws_ami" "wp_ami" {
-    most_recent = true
-    name_regex = "^.*ubuntu-focal-20.04-amd64-server-.*"    
-    owners = [ "099720109477" ] ## Canonical
+  most_recent = true
+  name_regex  = "^.*ubuntu-focal-20.04-amd64-server-.*"
+  owners      = ["099720109477"] ## Canonical
 
-    filter {
-        name   = "root-device-type"
-        values = ["ebs"]
-    }
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 
-    filter {
-        name   = "virtualization-type"
-        values = ["hvm"]
-    }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 ## Launch configuration for autoscaling
 resource "aws_launch_configuration" "lc_wp" {
-    
-    name_prefix = local.lc_name
-    image_id = data.aws_ami.wp_ami.image_id
-    instance_type = "t3.nano"
-    user_data = local.instance_user_data
-    key_name = aws_key_pair.kp.key_name
 
-    security_groups = [ aws_security_group.web_server.id ] 
+  name_prefix   = local.lc_name
+  image_id      = data.aws_ami.wp_ami.image_id
+  instance_type = "t3.nano"
+  user_data     = local.instance_user_data
+  key_name      = aws_key_pair.kp.key_name
 
-    lifecycle {
-        create_before_destroy = true
-    }
+  security_groups = [aws_security_group.web_server.id]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  metadata_options {
+    http_tokens   = "required"
+    http_endpoint = "disabled"
+  }
 }
 
 resource "aws_autoscaling_group" "ag_wp" {
-    
-    name = local.ag_name
-    
-    launch_configuration = aws_launch_configuration.lc_wp.id
-    max_size = 4 ## Max number of servers in group
-    min_size = 2 ## Min number of servers in group
-    target_group_arns = [aws_lb_target_group.tg.arn]
-    vpc_zone_identifier = module.vpc.public_subnets
 
-    tag {
-        key                 = "Name"
-        value               = "webserver-${random_string.lab_id.result}"
-        propagate_at_launch = true
-    }
-    tag {
-        key                 = "Lab-ID"
-        value               = random_string.lab_id.result
-        propagate_at_launch = true
-    }
+  name = local.ag_name
+
+  launch_configuration = aws_launch_configuration.lc_wp.id
+  max_size             = 4 ## Max number of servers in group
+  min_size             = 2 ## Min number of servers in group
+  target_group_arns    = [aws_lb_target_group.tg.arn]
+  vpc_zone_identifier  = module.vpc.public_subnets
+
+  tag {
+    key                 = "Name"
+    value               = "webserver-${random_string.lab_id.result}"
+    propagate_at_launch = true
+  }
+  tag {
+    key                 = "Lab-ID"
+    value               = random_string.lab_id.result
+    propagate_at_launch = true
+  }
 }
 
